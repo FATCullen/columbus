@@ -1,0 +1,72 @@
+*****************************************************************
+Journal for accession number:  0098060
+Created on:                    2022-01-12 17:14:38 UTC
+By:                            National Centers for Environmental Information
+
+Source: An informational file was created by NCEI staff and programmatically
+added to the about/ directory of this accession.
+
+Version:                       1.2
+
+Actions: Informational files were updated in the about/ directory of
+this accession.
+
+Files:
+about/
+This directory contains files created by NCEI staff and processing, including
+'negotiable' information between NCEI staff and the data provider.
+
+0098060_preview.png -
+  Preview graphic for these data.
+
+data/0-data/
+This directory contains the data files as submitted to NCEI.
+
+The following is a summary of the differences between the about/ files
+in the previous version of this accession and this version:
+
+Total number of files:              2
+Number of new files:                1
+Number of changed files:            0
+Number of files removed:            0
+Number of files moved or renamed:   0
+
+New files:
+
+0098060_preview.png
+
+*****************************************************************
+Journal for accession number: 0098060
+Created on:                    2012-10-01 17:25:58 UTC
+By:                            Brenda Robinson nee Humphries,OC1,SSMC3 4658,7133272 x105
+
+Source: The data in this archival information package (NODC accession
+0098060) is the content of NODC standard CD-ROM product Ocean Current Drifter
+Data on CD-ROM, NODC-53 and NODC-54. All data on these discs were extracted 
+from other data collections archived at the National Oceanographic Data Center 
+at the time the discs were created in 1991.
+
+Actions: ISO disc images of the original disc were created using standard
+disc duplication software and copied to data/0-data/disc_image/ directory. The
+content of the original disc were copied 'as is' to data/0-data/disc-content/
+directory.  Any software that were provided on these discs or used as a supple-
+ment to these discs are considered obsolete and are not included in 0-data/disc_contents.
+
+Files:
+about/
+This directory contains files created by NODC staff that describe the
+contents of the disc.
+
+data/0-data/
+This directory contains the data files from the original NODC-xx disc.
+
+data/0-data/disc_image/
+This directory contains an ISO disc image files that can be used by several
+CD-ROM authoring software applications to create an exact duplicate of the 
+original disc.
+
+data/0-data/disc_contents/
+This directory contains all of the individual directories and files, in
+their original order, to provide direct access to the original data on
+original disc, excluding any software files.
+
