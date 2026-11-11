@@ -9,3 +9,6 @@ FILES:
 - declination.py - Plots course without accounting for uncertainty
 - fielduncert3k.x - Fortran program included with CALS3K for estimating uncertainties, includes a compiled version for my hardware
 - isogonic.py - Creates map showing isogonic field lines for a given geomagnetic field model and year
+- isogonic.png - Example output of the isogonic field map for year 1492
+- isogonic_perturbed.py - Shows isogonic field plots for four perturbed versions of the 1492 model
+- isogonic_perturbed.png - Example output, isogonic plots of 4 perturbed geomagnetic models for year 1492

@@ -1,12 +1,10 @@
 import math
-import copy
 import tempfile
 import os
 
 import numpy as np
 from cartopy import crs as ccrs
 from matplotlib import pyplot as plt
-from matplotlib.patches import Ellipse
 from geographiclib.geodesic import Geodesic
 from pymagglobal import Model, local_curve
 
@@ -93,12 +91,64 @@ def write_model_file(path, knot_years, coeffs, n_degree, n_splines, t_start, t_e
             f.write(f"  {val:.15e}")
         f.write("\n")
 
+
+def endpoint_axis(final_lats, final_lons):
+    """
+    Straight line of best fit for monte carlo sim endpoints
+    """
+    mean_lat = float(np.mean(final_lats))
+    mean_lon = float(np.mean(final_lons))
+
+    east_scale = geod.Inverse(mean_lat, mean_lon - 0.005,
+                              mean_lat, mean_lon + 0.005)['s12'] / 10
+    north_scale = geod.Inverse(mean_lat - 0.005, mean_lon,
+                               mean_lat + 0.005, mean_lon)['s12'] / 10
+
+    xy = np.column_stack(((np.asarray(final_lons) - mean_lon) * east_scale,
+                          (np.asarray(final_lats) - mean_lat) * north_scale))
+    xy = np.asarray(xy)
+
+    center = xy.mean(axis=0)
+    centered = xy - center
+
+    values, vectors = np.linalg.eigh(np.cov(centered, rowvar=False))
+
+    axis = vectors[:, -1]
+    if axis[0] < 0:
+        axis = -axis
+
+    along = centered @ axis
+    across = centered @ np.array([-axis[1], axis[0]])
+
+    return dict(lat=mean_lat, lon=mean_lon, center=center, axis=axis,
+                east_scale=east_scale, north_scale=north_scale,
+                along=along, sigma=float(np.std(along, ddof=1)),
+                cross_sigma=float(np.std(across, ddof=1)))
+
+
+def axis_coordinates(stats, distances, cross=0.0):
+    """
+    Convert distances along/across the fitted axis back to map coordinates
+    """
+    axis = stats['axis']
+    perpendicular = np.array([-axis[1], axis[0]])
+    points = []
+
+    for distance in distances:
+        east, north = stats['center'] + distance * axis + cross * perpendicular
+        points.append((stats['lon'] + east / stats['east_scale'],
+                       stats['lat'] + north / stats['north_scale']))
+
+    return np.asarray(points).T
+
+
 def simulate_voyage(model, year=YEAR):
     """
     Simulate the voyage using the given model, returning lists of latitudes and longitudes.
     """
     lats = [start_lat]
     lons = [start_lon]
+
     for leg in course:
         _, _, _, bearing, distance = leg
         loc = (lats[-1], lons[-1])
@@ -107,12 +157,15 @@ def simulate_voyage(model, year=YEAR):
         result = geod.Direct(loc[0], loc[1], corrected, leagues_to_m(distance))
         lats.append(result['lat2'])
         lons.append(result['lon2'])
+
     return lats, lons
 
 def run_monte_carlo(model_path, n_trials=N_TRIALS, seed=RNG_SEED):
     """
     Monte Carlo sim
-    Perturbs model coefficients based on uncertainties for each trial
+    Perturbs model coefficients based on uncertainties for each trial.
+    Each harmonic coefficient has an independent normal draw shared across
+    all spline rows, matching the fortran interpolation of standard deviations
     """
     rng = np.random.default_rng(seed)
 
@@ -135,10 +188,8 @@ def run_monte_carlo(model_path, n_trials=N_TRIALS, seed=RNG_SEED):
             if (trial + 1) % 50 == 0:
                 print(f"Trial {trial + 1}/{n_trials} ...")
 
-            # Array of normal standard normally distributed perturbations in shape of coefficients
-            perturbation = rng.standard_normal(mu.shape)
-            # Perturb coefficients based on uncertainties and normal random draw
-            coeffs_perturbed = mu + sigma * perturbation
+            # One draw per harmonic coefficient, shared across each spline row
+            coeffs_perturbed = mu + sigma * rng.standard_normal((1, mu.shape[1]))
 
             # Write temporary model file with perturbed coefficients
             write_model_file(tmp_path, knot_years, coeffs_perturbed,
@@ -164,18 +215,9 @@ def print_statistics(base_final, final_lats, final_lons):
     """
     mean_lat = np.mean(final_lats)
     mean_lon = np.mean(final_lons)
-    best_fit = np.polyfit(final_lons, final_lats, 1)
-
-    # Distance from baseline to MC mean
+    stats = endpoint_axis(final_lats, final_lons)
     dist_result = geod.Inverse(base_final[0], base_final[1], mean_lat, mean_lon)
     mean_offset_km = dist_result['s12'] / 1000
-
-    # 1-sigma and 2-sigma spread in km (approximate, using lat std as proxy)
-    dists_km = []
-    for la, lo in zip(final_lats, final_lons):
-        r = geod.Inverse(mean_lat, mean_lon, la, lo)
-        dists_km.append(r['s12'] / 1000)
-    dists_km = np.array(dists_km)
 
     print("\n" + "="*55)
     print("Monte Carlo Results")
@@ -184,10 +226,12 @@ def print_statistics(base_final, final_lats, final_lons):
     print(f"  Baseline final     : {base_final[0]:.4f}°N, {base_final[1]:.4f}°E")
     print(f"  MC mean final      : {mean_lat:.4f}°N, {mean_lon:.4f}°E")
     print(f"  Offset (base->mean): {mean_offset_km:.1f} km")
-    print(f"  Best fit slope     : {best_fit[0]:.4f}")
-    print(f"  Radial 1std spread : {np.percentile(dists_km, 68.3):.1f} km")
-    print(f"  Radial 2std spread : {np.percentile(dists_km, 95.4):.1f} km")
-    print(f"  Radial 3std spread : {np.percentile(dists_km, 99.7):.1f} km")
+    print(f"  Along-axis std    : {stats['sigma']:.1f} km")
+    print(f"  Across-axis std   : {stats['cross_sigma']:.1f} km")
+    for multiple in (1, 2, 3):
+        coverage = np.mean(np.abs(stats['along']) <= multiple * stats['sigma'])
+        print(f"  +-{multiple} std along axis: +-{multiple * stats['sigma']:.1f} km"
+              f" ({coverage:.1%} of trials)")
     print("="*55)
 
 def plot_results(base_lats, base_lons, base_final, final_lats, final_lons):
@@ -196,8 +240,7 @@ def plot_results(base_lats, base_lons, base_final, final_lats, final_lons):
     """
     mean_lat = np.mean(final_lats)
     mean_lon = np.mean(final_lons)
-    best_fit = np.polyfit(final_lons, final_lats, 1, cov=True)
-    std_dist_km = np.std([geod.Inverse(mean_lat, mean_lon, la, lo)['s12'] / 1000 for la, lo in zip(final_lats, final_lons)])
+    stats = endpoint_axis(final_lats, final_lons)
 
     fig = plt.figure(figsize=(14, 10))
     ax = plt.axes(projection=ccrs.PlateCarree())
@@ -227,14 +270,22 @@ def plot_results(base_lats, base_lons, base_final, final_lats, final_lons):
             label=f'Baseline: ({base_final[0]:.2f}°N, {base_final[1]:.2f}°E)',
             transform=ccrs.PlateCarree())
 
-    # Best fit line, with marks at std distances
-    best_fit = np.polyfit(final_lons, final_lats, 1, cov=True)
-        std_dist_km = np.std([geod.Inverse(mean_lat, mean_lon, la, lo)['s12'] / 1000 for la, lo in zip(final_lats, final_lons)])
-    ax.plot(final_lons, best_fit[0][0] * final_lons + best_fit[0][1],
-            'k--', linewidth=1.5, zorder=5,
-            label=f'Best fit line (slope={best_fit[0][0]:.4f})',
-            transform=ccrs.PlateCarree())
-    ax.
+    # Orthogonal best-fit axis in physical distance, with perpendicular bars.
+    extent = max(3 * stats['sigma'], float(np.max(np.abs(stats['along']))), 1.0)
+    lon, lat = axis_coordinates(stats, np.linspace(-extent, extent, 100))
+    ax.plot(lon, lat, 'k--', linewidth=1.3, zorder=5,
+            label='Principal axis', transform=ccrs.PlateCarree())
+    cap = max(0.06 * stats['sigma'], 5.0)
+    for multiple, color in zip((1, 2, 3), ('darkgreen', 'darkorange', 'purple')):
+        for sign in (-1, 1):
+            distance = sign * multiple * stats['sigma']
+            ends = [axis_coordinates(stats, [distance], cross=c)[:, 0]
+                    for c in (-cap, cap)]
+            ax.plot([ends[0][0], ends[1][0]], [ends[0][1], ends[1][1]],
+                    color=color, linewidth=2, zorder=8,
+                    label=(f"+-{multiple}std: +-{multiple * stats['sigma']:.0f} km"
+                           if sign == 1 else None),
+                    transform=ccrs.PlateCarree())
 
     ax.legend(loc='lower left', fontsize=9)
     ax.set_title(

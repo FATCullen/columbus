@@ -41,4 +41,6 @@ ax.tricontour(plt_lon, plt_lat, declination,
 ax.set_global()
 ax.coastlines()
 
+plt.savefig('isogonic.png', dpi=150, bbox_inches='tight')
+
 plt.show()
