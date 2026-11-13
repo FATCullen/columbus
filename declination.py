@@ -100,6 +100,9 @@ def plot_course(course, model, year):
     ax.coastlines()
     ax.set_extent([-100, 10, 0, 50])
     plt.plot(lons, lats, marker='o')
+
+    plt.savefig('declination.png', dpi=150, bbox_inches='tight')
+
     plt.show()
 
 plot_course(course, model, year)
