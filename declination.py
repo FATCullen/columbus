@@ -83,7 +83,7 @@ def plot_course(course, model, year):
         starting_loc = (lats[-1], lons[-1])
         # Correct bearing for declination
         d, i, f = local_curve([year], starting_loc, model)
-        corrected_bearing = bearing + d[0] -4
+        corrected_bearing = bearing + d[0]
 
         # Calculate new position
         result = geod.Direct(starting_loc[0], starting_loc[1], corrected_bearing, leagues_to_m(distance))
